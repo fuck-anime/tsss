@@ -153,6 +153,78 @@ export namespace Lexical {
             this.span = init.span ?? null;
             this.valid = init.valid ?? true;
         }
+
+        traverseDepth(this: Node, f: (node: Node, direction: TraverseDirection) => unknown) {
+            const stack = [this] as Node[];
+
+            const grey = new WeakSet<Node>();
+            const black = new WeakSet<Node>();
+
+            while (stack.length) {
+                const top = stack[0]!;
+
+                if (!grey.has(top)) {
+                    // White:
+                    grey.add(top);
+
+                    if (f(top, TraverseDirection.Enter) !== skipChildren) {
+                        switch (top.type) {
+                            case Type.Root:
+                            case Type.Group:
+                            case Type.Quoted:
+                            case Type.Url:
+                            case Type.Comment:
+                            case Type.Quasi:
+                            case Type.Annotation:
+                            case Type.Identifier:
+                            case Type.Hash: {
+                                for (let i = top.children.length - 1; i >= 0; i--) {
+                                    stack.unshift(top.children[i]!);
+                                }
+                            }
+                        }
+                    }
+                } else if (!black.has(top)) {
+                    // Grey:
+                    stack.shift();
+                    black.add(top);
+                    f(top, TraverseDirection.Exit);
+                } else {
+                    // Black:
+                    stack.shift();
+                }
+            }
+        }
+
+        traverseBreadth(this: Node, f: (node: Node) => unknown) {
+            const visited = new WeakSet<Node>();
+            const queue = [this] as Node[];
+
+            visited.add(this);
+
+            while (queue.length) {
+                const node = queue.shift()!;
+
+                if (f(node) !== skipChildren) {
+                    switch (node.type) {
+                        case Type.Root:
+                        case Type.Group:
+                        case Type.Quoted:
+                        case Type.Url:
+                        case Type.Comment:
+                        case Type.Quasi:
+                        case Type.Annotation:
+                        case Type.Identifier:
+                        case Type.Hash: {
+                            for (const child of node.children) {
+                                queue.push(child);
+                                visited.add(child);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     export namespace Mixin {
@@ -191,6 +263,13 @@ export namespace Lexical {
             readonly valid?: boolean | null;
         }
     }
+
+    export const enum TraverseDirection {
+        Enter,
+        Exit,
+    }
+
+    export const skipChildren = Symbol();
 
     // region Root
     /**
